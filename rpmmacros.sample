@@ -1,0 +1,26 @@
+# This file should be renamed to ~/.rpmmacros
+# modify topdir and tmppath to point to the 
+# absolute path of ~/rpm and make sure that
+# directory exists
+
+# %packager               Mike Wall<mjwall@gmail.com>
+%packager               Your Name <your.name@gmail.com>
+%distribution           JBoss
+%vendor                 Redhat
+%license                LGPL
+
+%_signature             gpg
+# %_gpg_name              Mike Wall <mjwall@gmail.com>
+%_gpg_name              Your Name <your.name@gmail.com>
+# %_topdir                /home/mjwall/rpm/build
+%_topdir                /home/e2184/build
+# %_tmppath               /home/mjwall/rpm/rpmtmp
+%_tmppath               /home/e2184/rpmtmp
+
+%_builddir              %{_tmppath}/BUILD
+%_rpmtopdir             %{_topdir}/rpm/%{name}
+%_rpmdir                %{_topdir}/RPMS
+%_sourcedir             %{_rpmtopdir}
+%_specdir               %{_rpmtopdir}
+%_srcrpmdir             %{_rpmtopdir}
+

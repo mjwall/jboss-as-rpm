@@ -1,0 +1,192 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+
+  <modelVersion>4.0.0</modelVersion>
+  <packaging>jar</packaging>
+  <artifactId>jboss-as-rpm</artifactId>
+  <groupId>com.texeltek</groupId>
+  <version>1.0</version>
+  <name>JBoss AS 6.1.0 Final as RPM</name>
+  <description />
+
+  <developers>
+    <developer>
+      <id>mjwall</id>
+      <name>Michael Wall</name>
+      <email>mjwall@gmail.com</email>
+      <organization>TexelTek</organization>
+      <roles>
+        <role>Creator</role>
+        <role>Java Developer</role>
+      </roles>
+    </developer>
+  </developers>
+
+  <properties>
+    <jboss.version>6.1.0.Final</jboss.version>
+    <jboss.arch>x86_64</jboss.arch>
+    <jboss.install.dir>/usr/local/jboss</jboss.install.dir>
+  </properties>
+
+  <repositories>
+    <repository>
+      <id>codehaus</id>
+      <name>Codehaus Central repo</name>
+      <url>http://repository.codehaus.org</url>
+    </repository>
+    <repository>
+      <id>central</id>
+      <name>Maven Repository Switchboard</name>
+      <url>http://repo1.maven.org/maven2</url>
+    </repository>
+  </repositories>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-dependency-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>unpack</id>
+            <phase>process-test-classes</phase> <!-- before running tests -->
+            <goals>
+              <goal>unpack</goal>
+            </goals>
+            <configuration>
+              <artifactItems>
+                <artifactItem>
+                  <groupId>org.jboss.jbossas</groupId>
+                  <artifactId>jboss-as-distribution</artifactId>
+                  <version>${jboss.version}</version>
+                  <type>zip</type>
+                  <overWrite>false</overWrite>
+                  <outputDirectory>${project.build.directory}</outputDirectory>
+                </artifactItem>
+              </artifactItems>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+      <plugin>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>rpm-maven-plugin</artifactId>
+        <version>2.1-alpha-1</version>
+        <executions>
+          <execution>
+            <goals>
+              <goal>attached-rpm</goal> <!-- only execution that allows classifiers -->
+            </goals>
+          </execution>
+        </executions>
+        <configuration>
+          <name>jboss-as-rpm-${jboss.version}</name>
+          <classifier>${jboss.version}</classifier>
+          <!-- Sorry about the duplicate version here in the path.  With jboss.version in the name
+               the rpm packaged in target directory is named with the version.  In the classifier,
+               it is installed locally and deployed with the jboss version in the name.  But it means
+               the build directory in target iwll be /target/rpm/jboss-as-rpm-{version}-{version}
+
+               I thought it was important to have the version in the name of the artifact and when
+               deployed to a nexus
+          -->
+          <copyright>LGPL</copyright> <!-- JBoss's license -->
+          <distribution>TexelTek</distribution>
+          <group>Application/System</group>
+          <needarch>${jboss.arch}</needarch> <!-- there are some 64 bit hornetq libraries -->
+          <defineStatements>
+            <defineStatement>_unpackage_files_terminate_build 0</defineStatement>
+          </defineStatements>
+          <provides>
+            <provide>jboss</provide>
+          </provides>
+          <mappings>
+            <mapping>
+              <directory>${jboss.install.dir}</directory>
+              <configuration>false</configuration>
+              <username>jboss</username>
+              <groupname>jboss</groupname>
+              <sources>
+                <source>
+                  <location>${basedir}/target/jboss-${jboss.version}</location>
+                </source>
+              </sources>
+            </mapping>
+          </mappings>
+          <preinstallScriptlet>
+            <script>
+              /usr/sbin/groupadd -f -r jboss 2> /dev/null || :
+              /usr/sbin/useradd -r -m -c "JBoss user" -g jboss jboss 2> /dev/null || :
+
+              if [ ! -d /var/run/jboss ]; then
+              mkdir /var/run/jboss
+              chown jboss:jboss /var/run/jboss
+              fi
+            </script>
+          </preinstallScriptlet>
+          <postinstallScriptlet>
+            <script>
+              # echo "rpm postinstall $1"
+
+              fail() {
+              echo "ERROR: $1"
+              exit 1
+              }
+
+              # Register jboss as a  service
+              # stupid jboss scripts do no have chkconfig comment, grr
+              # have to do it by hand.  If they had the comment, I would run
+              # /sbin/chkconfig --add jboss || fail "chkconfig failed to register jboss"
+
+              ln -s ${jboss.install.dir}/bin/jboss_init_redhat.sh /etc/rc.d/init.d/jboss
+              ln -s /etc/init.d/jboss /etc/rc.d/rc0.d/K08jboss
+              ln -s /etc/init.d/jboss /etc/rc.d/rc1.d/K08jboss
+              ln -s /etc/init.d/jboss /etc/rc.d/rc2.d/K08jboss
+              ln -s /etc/init.d/jboss /etc/rc.d/rc6.d/K08jboss
+
+              ln -s /etc/init.d/jboss /etc/rc.d/rc3.d/S92jboss
+              ln -s /etc/init.d/jboss /etc/rc.d/rc4.d/S92jboss
+              ln -s /etc/init.d/jboss /etc/rc.d/rc5.d/S92jboss
+
+              # make the init script executable
+              chmod 755 ${jboss.install.dir}/bin/*.sh
+
+              echo "JBoss is now installed.  Set JBOSS_HOME to ${jboss.install.dir}.  A startup script is in /etc/init.d/jboss and JBoss is configured to start at runlevel 3, 4 and 5"
+            </script>
+          </postinstallScriptlet>
+          <preremoveScriptlet>
+            <script>
+              # echo "rpm preuninstall $1"
+
+              # Normal uninstall
+              if [ $1 = 0 ]; then
+              # unregister service, still wish I could us chkconfig, ie
+              # /sbin/chkconfig --del jboss
+              rm -f /etc/rc.d/init.d/jboss
+              rm -f /etc/rc.d/rc0.d/K08jboss
+              rm -f /etc/rc.d/rc1.d/K08jboss
+              rm -f /etc/rc.d/rc2.d/K08jboss
+              rm -f /etc/rc.d/rc6.d/K08jboss
+              rm -f /etc/rc.d/rc3.d/S92jboss
+              rm -f /etc/rc.d/rc4.d/S92jboss
+              rm -f /etc/rc.d/rc5.d/S92jboss
+              fi
+            </script>
+          </preremoveScriptlet>
+          <postremoveScriptlet>
+            <script>
+              # echo "rpm postuninstall $1"
+
+              JBHOME=$(echo ~jboss)
+              rm -rf /var/run/jboss 2> /dev/null || :
+              /usr/sbin/userdel jboss 2> /dev/null || :
+              echo "JBoss removed.  Leaving the JBoss user home directory, ${JBHOME}.  Remove manually if you really don't need it."
+            </script>
+          </postremoveScriptlet>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
+  <dependencies>
+  </dependencies>
+</project>
